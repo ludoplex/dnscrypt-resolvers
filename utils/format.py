@@ -44,13 +44,13 @@ class Entry:
                 description = description + line + "\n"
 
         description = description.strip()
-        if len(name) < 2 or len(description) < 10 or len(stamps) < 1:
+        if len(name) < 2 or len(description) < 10 or not stamps:
             return None
 
         return Entry(name, description, stamps)
 
     def format(self):
-        out = "## " + self.name + "\n\n"
+        out = f"## {self.name}" + "\n\n"
         out = out + self.description + "\n\n"
         for stamp in self.stamps:
             out = out + stamp + "\n"
@@ -58,27 +58,19 @@ class Entry:
         return out
 
     def format_legacy(self):
-        out = "## " + self.name + "\n\n"
+        out = f"## {self.name}" + "\n\n"
         out = out + self.description + "\n\n"
-        out = out + self.stamps[0] + "\n"
-
-        return out
+        return out + self.stamps[0] + "\n"
 
     def csv_entry(self):
         parsed = DNSCryptStamp.parse(self.stamps[0])
         if parsed is None:
             return None
-        version = 2
-        if self.name.find("cisco") >= 0:
-            version = 1
-        dnssec = "no"
-        nolog = "no"
+        version = 1 if self.name.find("cisco") >= 0 else 2
         namecoin = "no"
-        if parsed.dnssec:
-            dnssec = "yes"
-        if parsed.nolog:
-            nolog = "yes"
-        csv_entry = [
+        dnssec = "yes" if parsed.dnssec else "no"
+        nolog = "yes" if parsed.nolog else "no"
+        return [
             self.name,
             self.name,
             self.description.splitlines(False)[0],
@@ -95,8 +87,6 @@ class Entry:
             None,
         ]
 
-        return csv_entry
-
 
 class DNSCryptStamp:
     dnssec = False
@@ -112,25 +102,23 @@ class DNSCryptStamp:
         i = 0
         if bin[i] != 0x01:
             return None
-        i = i + 1
+        i += 1
         parsed = DNSCryptStamp()
         props = bin[i]
         parsed.dnssec = not not ((props >> 0) & 1)
         parsed.nolog = not not ((props >> 1) & 1)
         parsed.nofilter = not not ((props >> 2) & 1)
-        i = i + 8
+        i += 8
         addr_len = bin[i]
-        i = i + 1
+        i += 1
         parsed.addr = bin[i : i + addr_len].decode("utf-8")
-        i = i + addr_len
+        i += addr_len
         pk_len = bin[i]
         i = i + 1
         if pk_len != 32:
             return None
         hpk = bin[i : i + pk_len].hex().upper()
-        hpks = []
-        for j in range(0, 16):
-            hpks.append(hpk[j * 4 : j * 4 + 4])
+        hpks = [hpk[j * 4 : j * 4 + 4] for j in range(0, 16)]
         parsed.pk = ":".join(hpks)
         i = i + pk_len
         provider_len = bin[i]
@@ -142,8 +130,8 @@ class DNSCryptStamp:
 
 
 def process(md_path, signatures_to_update):
-    md_legacy_path = LEGACY_DIR + "/" + os.path.basename(md_path)
-    csv_historic_path = HISTORIC_DIR + "/" + "dnscrypt-resolvers.csv"
+    md_legacy_path = f"{LEGACY_DIR}/{os.path.basename(md_path)}"
+    csv_historic_path = f"{HISTORIC_DIR}/dnscrypt-resolvers.csv"
     print("\n[" + md_path + "]")
     entries = {}
     previous_content = ""
@@ -173,38 +161,34 @@ If you want to contribute changes to a resolvers list, only edit files from the 
         for i in range(0, len(raw_entries)):
             entry = Entry.parse(raw_entries[i])
             if not entry:
-                print("Invalid entry: [" + raw_entries[i] + "]", file=sys.stderr)
+                print(f"Invalid entry: [{raw_entries[i]}]", file=sys.stderr)
                 continue
             if entry.name in entries:
-                print("Duplicate entry: [" + entry.name + "]", file=sys.stderr)
+                print(f"Duplicate entry: [{entry.name}]", file=sys.stderr)
             entries[entry.name] = entry
 
     for name in sorted(entries.keys()):
         entry = entries[name]
         out = out + "\n" + entry.format() + "\n"
-        if not name in INCOMPATIBLE_WITH_LEGACY_VERSIONS:
+        if name not in INCOMPATIBLE_WITH_LEGACY_VERSIONS:
             out_legacy = out_legacy + "\n" + entry.format_legacy() + "\n"
 
     if os.path.basename(md_path) == "public-resolvers.md":
         for name in sorted(entries.keys()):
             entry = entries[name]
-            csv_entry = entry.csv_entry()
-            if csv_entry:
+            if csv_entry := entry.csv_entry():
                 csv_entries.append(entry.csv_entry())
 
     if out == previous_content:
         print("No changes")
     else:
-        with open(md_path + ".tmp", "wt") as f:
+        with open(f"{md_path}.tmp", "wt") as f:
             f.write(out)
-        os.rename(md_path + ".tmp", md_path)
+        os.rename(f"{md_path}.tmp", md_path)
 
     # Legacy
 
-    if (
-        os.path.basename(md_path) == "odoh-relays.md"
-        or os.path.basename(md_path) == "odoh-servers.md"
-    ):
+    if os.path.basename(md_path) in ["odoh-relays.md", "odoh-servers.md"]:
         md_legacy_path = md_path
     else:
         with open(md_legacy_path) as f:
@@ -212,13 +196,13 @@ If you want to contribute changes to a resolvers list, only edit files from the 
         if out_legacy == previous_content:
             print("No changes to the legacy version")
         else:
-            with open(md_legacy_path + ".tmp", "wt") as f:
+            with open(f"{md_legacy_path}.tmp", "wt") as f:
                 f.write(out_legacy)
-                os.rename(md_legacy_path + ".tmp", md_legacy_path)
+                os.rename(f"{md_legacy_path}.tmp", md_legacy_path)
 
     # Historic
 
-    if len(csv_entries) != 0:
+    if csv_entries:
         with open(csv_historic_path, "wt") as f:
             w = csv.writer(f, dialect="unix", quoting=csv.QUOTE_MINIMAL)
             w.writerow(
@@ -255,7 +239,7 @@ If you want to contribute changes to a resolvers list, only edit files from the 
 
 signatures_to_update = []
 
-for md_path in glob(CURRENT_DIR + "/*.md"):
+for md_path in glob(f"{CURRENT_DIR}/*.md"):
     process(md_path, signatures_to_update)
 
 if signatures_to_update:
