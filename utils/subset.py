@@ -35,13 +35,13 @@ class Entry:
                 description = description + line + "\n"
 
         description = description.strip()
-        if len(name) < 2 or len(description) < 10 or len(stamps) < 1:
+        if len(name) < 2 or len(description) < 10 or not stamps:
             return None
 
         return Entry(name, description, stamps)
 
     def format(self):
-        out = "## " + self.name + "\n\n"
+        out = f"## {self.name}" + "\n\n"
         out = out + self.description + "\n\n"
         for stamp in self.stamps:
             out = out + stamp + "\n"
@@ -54,7 +54,7 @@ def process(names_path, md_path):
     in_header = True
     header = ""
     with open(names_path) as f:
-        for line in f.readlines():
+        for line in f:
             line = line.rstrip()
             if in_header:
                 header = header + line + "\n"
@@ -72,22 +72,21 @@ def process(names_path, md_path):
         for i in range(0, len(raw_entries)):
             entry = Entry.parse(raw_entries[i])
             if not entry:
-                print(
-                    "Invalid entry: [" + raw_entries[i] + "]", file=sys.stderr)
+                print(f"Invalid entry: [{raw_entries[i]}]", file=sys.stderr)
                 continue
             if entry.name in entries:
-                print("Duplicate entry: [" + entry.name + "]", file=sys.stderr)
+                print(f"Duplicate entry: [{entry.name}]", file=sys.stderr)
             entries[entry.name] = entry
 
     print(header)
 
-    for name in entries.keys():
+    for name in entries:
         if name not in names_set:
             continue
 
         entry = entries[name]
 
-        print("## " + name)
+        print(f"## {name}")
         print()
         print(entry.description)
         for stamp in entry.stamps:

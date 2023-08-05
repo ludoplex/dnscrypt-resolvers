@@ -43,12 +43,12 @@ for name in servers:
     description = server.description
     stamps = server.stamps
     for extz in ["alt", "alt1", "alt2", "alt3", "alt4"]:
-        alt_name = base_name + "-" + extz
+        alt_name = f"{base_name}-{extz}"
         if alt_name in servers:
             alt_ip = servers[alt_name].description.split(" ")[-1]
-            description += " - " + alt_ip
+            description += f" - {alt_ip}"
             stamps += servers[alt_name].stamps
-    print("## " + name)
+    print(f"## {name}")
     print(description)
     print("\n".join(stamps))
     print()
